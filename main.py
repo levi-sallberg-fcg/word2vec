@@ -25,7 +25,7 @@ def read_input(path):
             texts.append(article_description)
 
     f.close()
-    merged_text = ' '.join(texts).replace('\n', '')
+    merged_text = '. '.join(texts).replace('\n', ' ')
     return merged_text
 
 
@@ -34,6 +34,7 @@ def train_model(filename):
     output_path = './resources/{}.model'.format(filename)
 
     if os.path.exists(output_path):
+        print("load trained model")
         trained_model = Word2Vec.load(output_path)
     else:
         text = read_input(input_path)
@@ -47,7 +48,8 @@ def train_model(filename):
 
             sentences.append(words)
 
-        trained_model = gensim.models.Word2Vec(sentences)
+        print("start training")
+        trained_model = gensim.models.Word2Vec(sentences, workers=6)
         trained_model.save(output_path)
 
     return trained_model
@@ -55,11 +57,11 @@ def train_model(filename):
 
 if __name__ == "__main__":
 
-    model = train_model('large')
+    model = train_model('gbr-eur-int')
 
     test_word = 'act'
     most_similar = model.wv.most_similar(test_word, topn=5)
-    print("Mot similar to '{}': ".format(test_word))
+    print("Most similar to '{}': ".format(test_word))
     for item in most_similar:
         print("'{}' with score {}".format(item[0], item[1]))
 
