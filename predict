@@ -1,0 +1,101 @@
+import pandas as pd
+import json
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import accuracy_score
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.pipeline import Pipeline
+from nltk.corpus import stopwords
+import nltk
+from sklearn.linear_model import LogisticRegression
+
+nltk.download('stopwords')
+stop_words = set(stopwords.words('swedish'))
+
+
+def label(categories, category):
+    if category in categories:
+        result = True
+    else:
+        result = False
+    return result
+
+
+def predict(log_reg_pipeline, x, categories, category):
+    result = log_reg_pipeline.predict(pd.Series(x))
+    if result[0]:
+        categories.append(category)
+    return categories
+
+
+def run_test(file):
+    data = pd.read_json(file)
+    data["tags"] = data.apply(lambda x: json.loads(x["tags"]), 1)
+
+    tags_column = data["tags"].tolist()
+    categories = list(set(item for sublist in tags_column for item in sublist))
+
+    print("These are the available labels: " + str(categories))
+
+    train, test = train_test_split(data, random_state=42, test_size=0.33, shuffle=True)
+    x_train = train.text
+    x_test = test.text
+
+    log_reg_pipeline = Pipeline([
+        ('tfidf', TfidfVectorizer(stop_words=stop_words)),
+        ('clf', OneVsRestClassifier(LogisticRegression(solver='sag', max_iter=500), n_jobs=5)),
+    ])
+
+    # Compute results for train and test data
+    for category in categories:
+        print('\nProcessing: {}'.format(category))
+
+        # train the model using X_dtm & y
+        labels = train.apply(lambda x: label(x["tags"], category), 1)
+        log_reg_pipeline.fit(x_train, labels)
+
+        # compute the testing accuracy
+        prediction = log_reg_pipeline.predict(x_test)
+        test_labels = test.apply(lambda x: label(x["tags"], category), 1)
+        print('Test accuracy is {}'.format(accuracy_score(test_labels, prediction)))
+
+
+def run_live(train, test):
+    data = pd.read_json(train)
+    data["tags"] = data.apply(lambda x: json.loads(x["tags"]), 1)
+    live_data = pd.read_json(test)
+
+    x_train = data.text
+
+    live_data['tags'] = np.empty((len(live_data), 0)).tolist()
+
+    tags_column = data["tags"].tolist()
+    categories = list(set(item for sublist in tags_column for item in sublist))
+
+    print("These are the available labels: " + str(categories))
+
+    log_reg_pipeline = Pipeline([
+        ('tfidf', TfidfVectorizer(stop_words=stop_words)),
+        ('clf', OneVsRestClassifier(LogisticRegression(solver='sag', max_iter=500), n_jobs=5)),
+    ])
+
+    # Compute results from other articles with labels
+    for category in categories:
+        print('\nProcessing: {}'.format(category))
+
+        # train the model using X_dtm & y
+        labels_train = data.apply(lambda x: label(x["tags"], category), 1)
+        log_reg_pipeline.fit(x_train, labels_train)
+
+        # compute the testing accuracy
+        result = live_data.apply(lambda x: predict(log_reg_pipeline, x.text, x['tags'], category), 1)
+        live_data['tags'] = result
+
+    return live_data
+
+
+if __name__ == "__main__":
+    # run_test('./resources/FI-tags.json')
+    result = run_live('./resources/FI-tags.json', './resources/regeringen-bankforeningen.json')
+    hej = 1
